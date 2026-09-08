@@ -4,6 +4,11 @@ import { ingestKmzBuffer, ingestKmlBuffer } from './lib/kmz.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+const ATTRIBUTION_TEXT = {
+  Satelit: 'Leaflet  •  Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics  •  © OpenStreetMap contributors',
+  Jalan: 'Leaflet  •  © OpenStreetMap contributors',
+};
+
 export default function App() {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
@@ -37,7 +42,7 @@ export default function App() {
 
   // --- init map once ---
   useEffect(() => {
-    const map = L.map(mapElRef.current, { zoomControl: false, attributionControl: true }).setView([-2.5, 118], 5);
+    const map = L.map(mapElRef.current, { zoomControl: false, attributionControl: false }).setView([-2.5, 118], 5);
     mapRef.current = map;
 
     const satelliteLayer = L.tileLayer(
@@ -304,8 +309,16 @@ export default function App() {
 
   return (
     <div className="app" id="app">
+      <div className="topbar-glow" aria-hidden="true" />
+
       <div className="topbar-pill">
         <span className="brand-name">Peta KMZ</span>
+        <div className="attrib-marquee">
+          <div className="attrib-marquee-track">
+            <span>{ATTRIBUTION_TEXT[baseLayerName]}</span>
+            <span>{ATTRIBUTION_TEXT[baseLayerName]}</span>
+          </div>
+        </div>
       </div>
 
       <input

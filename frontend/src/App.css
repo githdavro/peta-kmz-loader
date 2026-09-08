@@ -25,6 +25,21 @@ body{
   overflow: hidden;
 }
 
+/* ============ TOP GLOW OVERLAY (di belakang pill, biar teks tetap kebaca di atas peta) ============ */
+.topbar-glow{
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 800;
+  height: 130px;
+  pointer-events: none;
+  opacity: 1;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  background: linear-gradient(to bottom, rgba(10,20,24,0.75), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 100%);
+}
+
 /* ============ TOP PILL (liquid glass) ============ */
 .topbar-pill{
   position: fixed;
@@ -32,8 +47,14 @@ body{
   top: calc(14px + env(safe-area-inset-top));
   transform: translateX(-50%);
   z-index: 850;
-  padding: 11px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 22px 9px;
+  max-width: min(78vw, 320px);
   border-radius: 999px;
+  overflow: hidden;
   background: linear-gradient(180deg, rgba(23,49,58,0.68), rgba(13,26,32,0.68));
   -webkit-backdrop-filter: blur(22px) saturate(180%);
   backdrop-filter: blur(22px) saturate(180%);
@@ -49,6 +70,32 @@ body{
   letter-spacing: 0.02em;
   color: var(--text);
   white-space: nowrap;
+}
+
+.attrib-marquee{
+  width: 100%;
+  max-width: 210px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 14%, black 86%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 14%, black 86%, transparent);
+}
+.attrib-marquee-track{
+  display: flex;
+  width: max-content;
+  gap: 28px;
+  animation: attrib-scroll 14s linear infinite;
+}
+.attrib-marquee-track span{
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+@keyframes attrib-scroll{
+  from{ transform: translateX(0); }
+  to{ transform: translateX(calc(-50% - 14px)); }
 }
 
 input[type=file]{ display: none; }
@@ -213,7 +260,7 @@ input[type=file]{ display: none; }
 .dropzone.active{ display: flex; }
 
 .hint-card{
-  position: absolute; top: 18px; left: 18px; z-index: 400;
+  position: absolute; top: calc(104px + env(safe-area-inset-top)); left: 18px; z-index: 400;
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 10px; padding: 14px 16px; max-width: 280px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.35);
@@ -265,18 +312,6 @@ input[type=file]{ display: none; }
 .leaflet-bottom.leaflet-left{
   margin-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
 }
-/* Geser atribusi Leaflet (pojok kanan bawah) ke atas 2 FAB (layer + upload) */
-.leaflet-bottom.leaflet-right{
-  margin-bottom: calc(152px + env(safe-area-inset-bottom)) !important;
-}
-.leaflet-control-attribution{
-  background: rgba(18,34,41,0.75) !important;
-  color: var(--muted) !important;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  border-radius: 6px;
-}
-.leaflet-control-attribution a{ color: var(--accent) !important; }
 .zr-btn{
   width: 40px;
   height: 40px;
@@ -301,10 +336,10 @@ input[type=file]{ display: none; }
 /* ============ MOBILE / TABLET ============ */
 @media (max-width: 860px){
   .hint-card{
-    top: 14px;
+    top: calc(100px + env(safe-area-inset-top));
     left: 12px;
     right: auto;
-    max-width: calc(100% - 76px);
+    max-width: calc(100% - 24px);
   }
 
   .toast{
