@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.1">
+<Document>
+   <name>Satellite image overlay - EJ2010304_4m_res.jpg</name>
+     <GroundOverlay>
+          <name>EJ20110304_4m_res.jpg</name>
+          <description>GEOEYE 1 image overlay © CRISP 2011</description>
+          <Icon>
+               <href>EJ20110304_4m_res.jpg</href>
+          </Icon>
+          <LatLonBox>
+               <north>-7.510027778</north>
+               <south>-7.546389</south>
+               <east>112.7335</east>
+               <west>112.6997222</west>
+          </LatLonBox>
+     </GroundOverlay>
+</Document>
+</kml>

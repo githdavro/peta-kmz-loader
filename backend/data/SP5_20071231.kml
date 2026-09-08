@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.1">
+<Document>
+   <name>Satellite image overlay - SP5_20071231.jpg</name>
+     <GroundOverlay>
+          <name>SP5_20071231.jpg</name>
+          <description>IKONOS image overlay © CNES 2007</description>
+          <Icon>
+               <href>SP5_20071231.jpg</href>
+          </Icon>
+          <LatLonBox>
+               <north>-7.485891667</north>
+               <south>-7.593441667</south>
+               <east>112.8960278</east>
+               <west>112.6868333</west>
+          </LatLonBox>
+     </GroundOverlay>
+</Document>
+</kml>

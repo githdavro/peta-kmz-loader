@@ -1,0 +1,483 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import L from 'leaflet';
+import { ingestKmzBuffer, ingestKmlBuffer } from './lib/kmz.js';
+
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+export default function App() {
+  const mapElRef = useRef(null);
+  const mapRef = useRef(null);
+  const dataLayerRef = useRef(null);
+  const assetUrlsRef = useRef([]);
+  const rotationRef = useRef(0);
+  const rotWrapperRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const satelliteLayerRef = useRef(null);
+  const streetLayerRef = useRef(null);
+  const labelsLayerRef = useRef(null);
+
+  const [placemarks, setPlacemarks] = useState([]);
+  const [loadedSources, setLoadedSources] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(null);
+  const [toast, setToast] = useState({ show: false, msg: '', info: false });
+  const [dropActive, setDropActive] = useState(false);
+  const [availableFiles, setAvailableFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState('');
+  const [loadingFile, setLoadingFile] = useState(false);
+  const [hintVisible, setHintVisible] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [baseLayerName, setBaseLayerName] = useState('Satelit');
+  const [navActive, setNavActive] = useState('data');
+
+  const toastTimer = useRef(null);
+  const showToast = useCallback((msg, kind) => {
+    setToast({ show: true, msg, info: kind === 'info' });
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast((t) => ({ ...t, show: false })), 4200);
+  }, []);
+
+  // --- init map once ---
+  useEffect(() => {
+    const map = L.map(mapElRef.current, { zoomControl: false, attributionControl: true }).setView([-2.5, 118], 5);
+    mapRef.current = map;
+
+    const satelliteLayer = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics' }
+    );
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    });
+    const labelsLayer = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, pane: 'shadowPane' }
+    );
+
+    satelliteLayer.addTo(map);
+    labelsLayer.addTo(map);
+    satelliteLayerRef.current = satelliteLayer;
+    streetLayerRef.current = streetLayer;
+    labelsLayerRef.current = labelsLayer;
+
+    L.control
+      .layers({ Satelit: satelliteLayer, Jalan: streetLayer }, {}, { position: 'topright', collapsed: true })
+      .addTo(map);
+
+    map.on('baselayerchange', (e) => {
+      if (e.name === 'Satelit') labelsLayer.addTo(map);
+      else map.removeLayer(labelsLayer);
+      setBaseLayerName(e.name);
+    });
+
+    // --- rotation wrapper: only rotates the tile/marker panes, not the controls ---
+    const mapPaneEl = map.getPane('mapPane');
+    const rotWrapper = document.createElement('div');
+    rotWrapper.className = 'map-rotate-wrapper';
+    mapPaneEl.parentNode.insertBefore(rotWrapper, mapPaneEl);
+    rotWrapper.appendChild(mapPaneEl);
+    rotWrapperRef.current = rotWrapper;
+
+    function applyRotation() {
+      rotWrapper.style.transform = `rotate(${rotationRef.current}deg) scale(1.8)`;
+      if (((rotationRef.current % 360) + 360) % 360 !== 0) map.dragging.disable();
+      else map.dragging.enable();
+    }
+    function rotateBy(delta) {
+      rotationRef.current = ((rotationRef.current + delta) % 360 + 360) % 360;
+      applyRotation();
+    }
+
+    const ZoomRotateControl = L.Control.extend({
+      options: { position: 'bottomleft' },
+      onAdd: function () {
+        const container = L.DomUtil.create('div', 'zr-control');
+        container.innerHTML =
+          '<div class="zr-btn" data-action="zoomin" title="Perbesar"><span class="material-symbols-rounded">add</span></div>' +
+          '<div class="zr-divider"></div>' +
+          '<div class="zr-btn" data-action="zoomout" title="Perkecil"><span class="material-symbols-rounded">remove</span></div>';
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+        container.querySelector('[data-action="zoomin"]').addEventListener('click', () => map.zoomIn());
+        container.querySelector('[data-action="zoomout"]').addEventListener('click', () => map.zoomOut());
+        return container;
+      },
+    });
+    new ZoomRotateControl().addTo(map);
+
+    const RotateControl = L.Control.extend({
+      options: { position: 'bottomleft' },
+      onAdd: function () {
+        const container = L.DomUtil.create('div', 'zr-control');
+        container.innerHTML =
+          '<div class="zr-btn" data-action="rotleft" title="Putar kiri"><span class="material-symbols-rounded">rotate_left</span></div>' +
+          '<div class="zr-divider"></div>' +
+          '<div class="zr-btn" data-action="rotright" title="Putar kanan"><span class="material-symbols-rounded">rotate_right</span></div>';
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+        container.querySelector('[data-action="rotleft"]').addEventListener('click', () => rotateBy(-15));
+        container.querySelector('[data-action="rotright"]').addEventListener('click', () => rotateBy(15));
+        return container;
+      },
+    });
+    new RotateControl().addTo(map);
+
+    dataLayerRef.current = L.featureGroup().addTo(map);
+
+    fetchAvailableFiles();
+
+    return () => {
+      map.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function resetData() {
+    assetUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    assetUrlsRef.current = [];
+    dataLayerRef.current.clearLayers();
+    setPlacemarks([]);
+    setLoadedSources([]);
+    setActiveIndex(null);
+  }
+
+  // mode: 'replace' (clears everything already loaded) or 'append' (used for auto-load)
+  function applyParsed(sourceName, result, mode) {
+    setPlacemarks((prev) => (mode === 'append' ? [...prev, ...result.placemarks] : result.placemarks));
+    setLoadedSources((prev) =>
+      mode === 'append'
+        ? [...prev, { name: sourceName, count: result.itemCount }]
+        : [{ name: sourceName, count: result.itemCount }]
+    );
+
+    if (result.itemCount === 0) {
+      showToast(`"${sourceName}" dimuat, tapi tidak ada Placemark atau GroundOverlay yang bisa ditampilkan.`, 'info');
+    } else {
+      setHintVisible(false);
+      try {
+        mapRef.current.fitBounds(dataLayerRef.current.getBounds(), { padding: [30, 30], maxZoom: 16 });
+      } catch (e) {
+        /* ignore invalid bounds */
+      }
+    }
+  }
+
+  function handleFile(file, mode) {
+    mode = mode || 'replace';
+    if (mode !== 'append') resetData();
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith('.kmz')) {
+      file
+        .arrayBuffer()
+        .then((buffer) => ingestKmzBuffer(buffer, file.name, assetUrlsRef.current, dataLayerRef.current))
+        .then((result) => applyParsed(file.name, result, mode))
+        .catch((err) => {
+          console.error(err);
+          showToast('Gagal membuka file KMZ. Pastikan file tidak rusak / bukan hasil rename dari format lain.');
+        });
+    } else if (lower.endsWith('.kml')) {
+      file
+        .arrayBuffer()
+        .then((buffer) => ingestKmlBuffer(buffer, dataLayerRef.current))
+        .then((result) => applyParsed(file.name, result, mode))
+        .catch(() => showToast('Gagal membaca file KML.'));
+    } else {
+      showToast('Format tidak didukung. Gunakan file .kmz atau .kml.');
+    }
+  }
+
+  // Cuma ambil daftar nama file yang ada di /data lewat backend, buat ngisi
+  // dropdown pemilihan. Belum nge-render apa pun ke peta. Kalau backend
+  // nggak keload (mis. lokal tanpa server), dropdown-nya otomatis kosong dan
+  // fallback ke upload manual.
+  function fetchAvailableFiles() {
+    fetch(`${API_URL}/api/kmz-files`)
+      .then((r) => {
+        if (!r.ok) throw new Error('no backend');
+        return r.json();
+      })
+      .then((data) => {
+        setAvailableFiles((data && data.files) || []);
+      })
+      .catch(() => {
+        /* no backend available — stay on manual upload mode */
+      });
+  }
+
+  // Ambil satu file dari backend berdasarkan nama yang dipilih user, lalu
+  // render (replace, bukan append — jadi cuma file itu yang tampil di peta).
+  function loadFileByName(name) {
+    if (!name) return;
+    setLoadingFile(true);
+    resetData();
+    fetch(`${API_URL}/api/kmz-file?name=${encodeURIComponent(name)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error('fetch failed: ' + name);
+        return r.arrayBuffer();
+      })
+      .then((buffer) => {
+        const lower = name.toLowerCase();
+        if (lower.endsWith('.kmz')) {
+          return ingestKmzBuffer(buffer, name, assetUrlsRef.current, dataLayerRef.current).then((result) =>
+            applyParsed(name, result, 'replace')
+          );
+        }
+        if (lower.endsWith('.kml')) {
+          return ingestKmlBuffer(buffer, dataLayerRef.current).then((result) =>
+            applyParsed(name, result, 'replace')
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn('Gagal memuat file:', name, err);
+        showToast('Gagal memuat "' + name + '" dari server.');
+      })
+      .finally(() => setLoadingFile(false));
+  }
+
+  function selectPlacemark(idx) {
+    setActiveIndex(idx);
+    const pm = placemarks[idx];
+    const l = pm.layers[0].layer;
+    try {
+      mapRef.current.fitBounds(l.getBounds ? l.getBounds() : L.latLngBounds([l.getLatLng()]), {
+        padding: [60, 60],
+        maxZoom: 16,
+      });
+    } catch (e) {
+      if (l.getLatLng) mapRef.current.setView(l.getLatLng(), 15);
+    }
+    l.openPopup();
+    setSidebarOpen(false);
+  }
+
+  function toggleBaseLayer() {
+    const map = mapRef.current;
+    if (!map) return;
+    const sat = satelliteLayerRef.current;
+    const street = streetLayerRef.current;
+    const labels = labelsLayerRef.current;
+    if (baseLayerName === 'Satelit') {
+      map.removeLayer(sat);
+      map.removeLayer(labels);
+      street.addTo(map);
+      setBaseLayerName('Jalan');
+    } else {
+      map.removeLayer(street);
+      sat.addTo(map);
+      labels.addTo(map);
+      setBaseLayerName('Satelit');
+    }
+  }
+
+  function handleNavTap(id) {
+    setNavActive(id);
+    if (id === 'data') setSidebarOpen((v) => !v);
+    else if (id === 'upload') fileInputRef.current.click();
+    else if (id === 'layer') toggleBaseLayer();
+    else if (id === 'info') setHintVisible((v) => !v);
+  }
+
+  // --- drag & drop on whole page ---
+  const dragCounter = useRef(0);
+  useEffect(() => {
+    function onDragEnter(e) {
+      e.preventDefault();
+      dragCounter.current++;
+      setDropActive(true);
+    }
+    function onDragLeave(e) {
+      e.preventDefault();
+      dragCounter.current = Math.max(0, dragCounter.current - 1);
+      if (dragCounter.current === 0) setDropActive(false);
+    }
+    function onDrop(e) {
+      e.preventDefault();
+      dragCounter.current = 0;
+      setDropActive(false);
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) {
+        setSelectedFile('');
+        handleFile(f, 'replace');
+      }
+    }
+    document.body.addEventListener('dragenter', onDragEnter);
+    document.body.addEventListener('dragover', onDragEnter);
+    document.body.addEventListener('dragleave', onDragLeave);
+    document.body.addEventListener('drop', onDrop);
+    return () => {
+      document.body.removeEventListener('dragenter', onDragEnter);
+      document.body.removeEventListener('dragover', onDragEnter);
+      document.body.removeEventListener('dragleave', onDragLeave);
+      document.body.removeEventListener('drop', onDrop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placemarks]);
+
+  const totalCount = loadedSources.reduce((a, s) => a + s.count, 0);
+  const headerVisible = loadedSources.length > 0;
+
+  return (
+    <div className="app" id="app">
+      <div className="topbar">
+        <div className="topbar-left">
+          <button
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-label="Buka daftar data"
+            title="Daftar data"
+          >
+            <span className="material-symbols-rounded">{sidebarOpen ? 'close' : 'menu'}</span>
+          </button>
+          <div className="brand">
+            <span className="brand-mark">KMZ</span>
+            <span className="brand-name">Peta KMZ</span>
+          </div>
+        </div>
+        <div>
+          <button
+            className="upload-btn"
+            onClick={() => fileInputRef.current.click()}
+          >
+            <span className="material-symbols-rounded upload-btn-icon">upload_file</span>
+            <span className="upload-btn-text">Buka file KMZ / KML</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".kmz,.kml"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                setSelectedFile('');
+                handleFile(e.target.files[0], 'replace');
+                setSidebarOpen(false);
+              }
+              e.target.value = '';
+            }}
+          />
+        </div>
+      </div>
+
+      <div
+        className={'sidebar-backdrop' + (sidebarOpen ? ' show' : '')}
+        onClick={() => setSidebarOpen(false)}
+      ></div>
+
+      <div className={'sidebar' + (sidebarOpen ? ' open' : '')}>
+        {availableFiles.length > 0 && (
+          <div className="server-file-list">
+            <div className="server-file-list-title">Data di server</div>
+            {availableFiles.map((name) => (
+              <div
+                key={name}
+                className={
+                  'server-file-item' +
+                  (selectedFile === name ? ' active' : '') +
+                  (loadingFile ? ' disabled' : '')
+                }
+                onClick={() => {
+                  if (loadingFile || selectedFile === name) return;
+                  setSelectedFile(name);
+                  loadFileByName(name);
+                  setSidebarOpen(false);
+                }}
+              >
+                <span className={'material-symbols-rounded server-file-icon' + (loadingFile && selectedFile === name ? ' spinning' : '')}>
+                  {loadingFile && selectedFile === name ? 'progress_activity' : 'layers'}
+                </span>
+                <span className="server-file-name">{name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {headerVisible && (
+          <div className="sidebar-header">
+            {loadedSources.length <= 1 ? (
+              <>
+                <div className="file-name">{loadedSources[0]?.name}</div>
+                <div className="file-meta">{loadedSources[0]?.count} item dimuat</div>
+              </>
+            ) : (
+              <>
+                <div className="file-name">{loadedSources.length} file data dimuat</div>
+                <div className="file-meta">
+                  {totalCount} item total &bull; {loadedSources.map((s) => s.name).join(', ')}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        <div className="placemark-list">
+          {placemarks.length === 0 ? (
+            <div className="empty-state">
+              Belum ada data dimuat.
+              <br />
+              <br />
+              Klik <b>&quot;Buka file KMZ / KML&quot;</b> di atas, atau seret file langsung ke area peta.
+            </div>
+          ) : (
+            placemarks.map((pm, idx) => (
+              <div
+                key={idx}
+                className={'placemark-item' + (activeIndex === idx ? ' active' : '')}
+                onClick={() => selectPlacemark(idx)}
+              >
+                {pm.type === 'Citra' ? (
+                  <span className="pm-swatch" style={{ backgroundImage: `url(${pm.thumb})` }} />
+                ) : (
+                  <span className="pm-dot" style={{ background: pm.color }} />
+                )}
+                <div className="pm-text">
+                  <div className="pm-name">{pm.name}</div>
+                  <div className="pm-type">{pm.type}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="map-wrap">
+        <div id="map" ref={mapElRef}></div>
+        {hintVisible && (
+          <div className="hint-card">
+            <p>
+              <b style={{ color: 'var(--text)' }}>Cara pakai:</b>
+            </p>
+            <p>
+              Muat file .kmz atau .kml. Titik, garis, area, maupun citra satelit (ground overlay) akan tergambar
+              otomatis dan bisa diklik dari daftar di sisi kiri.
+            </p>
+            <p>
+              Kalau backend-nya sudah jalan / ter-deploy dengan data ditaruh di folder <code>data/</code>, halaman
+              ini akan memuatnya otomatis tanpa perlu upload manual.
+            </p>
+          </div>
+        )}
+        <div className={'dropzone' + (dropActive ? ' active' : '')}>Lepas file di sini untuk memuat</div>
+        <div className={'toast' + (toast.show ? ' show' : '') + (toast.info ? ' info' : '')}>{toast.msg}</div>
+      </div>
+
+      <nav className="liquid-tabbar" role="tablist" aria-label="Navigasi cepat">
+        {[
+          { id: 'data', icon: 'folder_open', label: 'Data' },
+          { id: 'upload', icon: 'upload_file', label: 'Upload' },
+          { id: 'layer', icon: baseLayerName === 'Satelit' ? 'satellite_alt' : 'map', label: baseLayerName },
+          { id: 'info', icon: 'info', label: 'Info' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={navActive === tab.id}
+            className={'lt-tab' + (navActive === tab.id ? ' expanded' : '')}
+            onClick={() => handleNavTap(tab.id)}
+          >
+            <span className="material-symbols-rounded lt-icon">{tab.icon}</span>
+            <span className="lt-label">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
