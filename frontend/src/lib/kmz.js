@@ -162,7 +162,7 @@ export function parseKmlToLayers(text, assetMap, dataLayer) {
     const url = resolveHref(href, assetMap);
 
     const box = go.querySelector('LatLonBox');
-    if (!url || !box) return;
+    if (!box) return;
     const north = parseFloat(box.querySelector('north').textContent);
     const south = parseFloat(box.querySelector('south').textContent);
     const east = parseFloat(box.querySelector('east').textContent);
@@ -170,12 +170,33 @@ export function parseKmlToLayers(text, assetMap, dataLayer) {
     if ([north, south, east, west].some(isNaN)) return;
 
     const bounds = [[south, west], [north, east]];
-    const overlay = L.imageOverlay(url, bounds, { opacity: 0.95 });
-    overlay.bindPopup('<b>' + escapeHtml(name) + '</b>' + (desc ? '<div>' + escapeHtml(desc).slice(0, 400) + '</div>' : ''));
+    const hasImage = !!url;
+
+    // Gambar citra kadang tidak ikut disertakan (file .kml polos yang cuma
+    // berisi metadata LatLonBox, tanpa .jpg pendamping / bukan .kmz). Daripada
+    // diam-diam dilewati, tetap gambar kotak batasnya biar user tahu lokasinya.
+    const overlay = hasImage
+      ? L.imageOverlay(url, bounds, { opacity: 0.95 })
+      : L.rectangle(bounds, { color: '#4fa8a0', weight: 2, dashArray: '6 5', fillOpacity: 0.06 });
+
+    const missingNote = hasImage
+      ? ''
+      : '<div style="color:#e2604f;margin-top:6px;font-size:12px;">File gambar citra (' +
+        escapeHtml(href || '?') +
+        ') tidak ikut disertakan &mdash; hanya batas area yang ditampilkan.</div>';
+    overlay.bindPopup(
+      '<b>' + escapeHtml(name) + '</b>' + (desc ? '<div>' + escapeHtml(desc).slice(0, 400) + '</div>' : '') + missingNote
+    );
     dataLayer.addLayer(overlay);
 
     itemCount++;
-    placemarks.push({ name, type: 'Citra', layers: [{ layer: overlay, type: 'Citra' }], color: '#4fa8a0', thumb: url });
+    placemarks.push({
+      name,
+      type: hasImage ? 'Citra' : 'Citra (gambar tidak ada)',
+      layers: [{ layer: overlay, type: 'Citra' }],
+      color: '#4fa8a0',
+      thumb: hasImage ? url : null,
+    });
   });
 
   return { itemCount, placemarks };

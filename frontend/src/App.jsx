@@ -27,7 +27,6 @@ export default function App() {
   const [hintVisible, setHintVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [baseLayerName, setBaseLayerName] = useState('Satelit');
-  const [navActive, setNavActive] = useState('data');
 
   const toastTimer = useRef(null);
   const showToast = useCallback((msg, kind) => {
@@ -59,16 +58,6 @@ export default function App() {
     satelliteLayerRef.current = satelliteLayer;
     streetLayerRef.current = streetLayer;
     labelsLayerRef.current = labelsLayer;
-
-    L.control
-      .layers({ Satelit: satelliteLayer, Jalan: streetLayer }, {}, { position: 'topright', collapsed: true })
-      .addTo(map);
-
-    map.on('baselayerchange', (e) => {
-      if (e.name === 'Satelit') labelsLayer.addTo(map);
-      else map.removeLayer(labelsLayer);
-      setBaseLayerName(e.name);
-    });
 
     // --- rotation wrapper: only rotates the tile/marker panes, not the controls ---
     const mapPaneEl = map.getPane('mapPane');
@@ -270,12 +259,8 @@ export default function App() {
     }
   }
 
-  function handleNavTap(id) {
-    setNavActive(id);
-    if (id === 'data') setSidebarOpen((v) => !v);
-    else if (id === 'upload') fileInputRef.current.click();
-    else if (id === 'layer') toggleBaseLayer();
-    else if (id === 'info') setHintVisible((v) => !v);
+  function handleFabUpload() {
+    fileInputRef.current.click();
   }
 
   // --- drag & drop on whole page ---
@@ -319,45 +304,24 @@ export default function App() {
 
   return (
     <div className="app" id="app">
-      <div className="topbar">
-        <div className="topbar-left">
-          <button
-            className="sidebar-toggle-btn"
-            onClick={() => setSidebarOpen((v) => !v)}
-            aria-label="Buka daftar data"
-            title="Daftar data"
-          >
-            <span className="material-symbols-rounded">{sidebarOpen ? 'close' : 'menu'}</span>
-          </button>
-          <div className="brand">
-            <span className="brand-mark">KMZ</span>
-            <span className="brand-name">Peta KMZ</span>
-          </div>
-        </div>
-        <div>
-          <button
-            className="upload-btn"
-            onClick={() => fileInputRef.current.click()}
-          >
-            <span className="material-symbols-rounded upload-btn-icon">upload_file</span>
-            <span className="upload-btn-text">Buka file KMZ / KML</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".kmz,.kml"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                setSelectedFile('');
-                handleFile(e.target.files[0], 'replace');
-                setSidebarOpen(false);
-              }
-              e.target.value = '';
-            }}
-          />
-        </div>
+      <div className="topbar-pill">
+        <span className="brand-name">Peta KMZ</span>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".kmz,.kml"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          if (e.target.files && e.target.files[0]) {
+            setSelectedFile('');
+            handleFile(e.target.files[0], 'replace');
+            setSidebarOpen(false);
+          }
+          e.target.value = '';
+        }}
+      />
 
       <div
         className={'sidebar-backdrop' + (sidebarOpen ? ' show' : '')}
@@ -373,6 +337,7 @@ export default function App() {
                 key={name}
                 className={
                   'server-file-item' +
+
                   (selectedFile === name ? ' active' : '') +
                   (loadingFile ? ' disabled' : '')
                 }
@@ -423,8 +388,14 @@ export default function App() {
                 className={'placemark-item' + (activeIndex === idx ? ' active' : '')}
                 onClick={() => selectPlacemark(idx)}
               >
-                {pm.type === 'Citra' ? (
-                  <span className="pm-swatch" style={{ backgroundImage: `url(${pm.thumb})` }} />
+                {pm.type.startsWith('Citra') ? (
+                  pm.thumb ? (
+                    <span className="pm-swatch" style={{ backgroundImage: `url(${pm.thumb})` }} />
+                  ) : (
+                    <span className="pm-swatch pm-swatch-missing">
+                      <span className="material-symbols-rounded">image_not_supported</span>
+                    </span>
+                  )
                 ) : (
                   <span className="pm-dot" style={{ background: pm.color }} />
                 )}
@@ -459,25 +430,27 @@ export default function App() {
         <div className={'toast' + (toast.show ? ' show' : '') + (toast.info ? ' info' : '')}>{toast.msg}</div>
       </div>
 
-      <nav className="liquid-tabbar" role="tablist" aria-label="Navigasi cepat">
-        {[
-          { id: 'data', icon: 'folder_open', label: 'Data' },
-          { id: 'upload', icon: 'upload_file', label: 'Upload' },
-          { id: 'layer', icon: baseLayerName === 'Satelit' ? 'satellite_alt' : 'map', label: baseLayerName },
-          { id: 'info', icon: 'info', label: 'Info' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={navActive === tab.id}
-            className={'lt-tab' + (navActive === tab.id ? ' expanded' : '')}
-            onClick={() => handleNavTap(tab.id)}
-          >
-            <span className="material-symbols-rounded lt-icon">{tab.icon}</span>
-            <span className="lt-label">{tab.label}</span>
-          </button>
-        ))}
-      </nav>
+      <button
+        className="fab fab-hamburger"
+        onClick={() => setSidebarOpen((v) => !v)}
+        aria-label="Buka daftar data"
+        title="Daftar data"
+      >
+        <span className="material-symbols-rounded">{sidebarOpen ? 'close' : 'menu'}</span>
+      </button>
+
+      <button className="fab fab-upload" onClick={handleFabUpload} aria-label="Buka file KMZ / KML" title="Buka file KMZ / KML">
+        <span className="material-symbols-rounded">upload_file</span>
+      </button>
+
+      <button
+        className="fab fab-layer"
+        onClick={toggleBaseLayer}
+        aria-label={'Ganti ke ' + (baseLayerName === 'Satelit' ? 'peta jalan' : 'citra satelit')}
+        title={baseLayerName === 'Satelit' ? 'Satelit (klik untuk peta jalan)' : 'Jalan (klik untuk citra satelit)'}
+      >
+        <span className="material-symbols-rounded">{baseLayerName === 'Satelit' ? 'satellite_alt' : 'map'}</span>
+      </button>
     </div>
   );
 }
