@@ -82,8 +82,22 @@ export default function App() {
     // berputar (norotatePane), jadi tulisan tetap tegak dibaca meski peta diputar
     // — sama seperti perilaku Google Maps.
 
+    // Perubahan bearing dari pinch/gesture 2 jari harus instan (no transition,
+    // biar nempel pas sama gerakan jari). Tapi klik tombol putar kiri/kanan/utara
+    // itu perubahan mendadak satu langkah, jadi dikasih animasi transisi supaya
+    // halus — makanya class animasi cuma dipasang sesaat lalu dilepas lagi.
+    let rotateAnimTimer = null;
+    function setBearingAnimated(newBearing) {
+      const pane = map.getPane('rotatePane');
+      if (pane) {
+        pane.classList.add('rp-anim');
+        clearTimeout(rotateAnimTimer);
+        rotateAnimTimer = setTimeout(() => pane.classList.remove('rp-anim'), 340);
+      }
+      map.setBearing(newBearing);
+    }
     function rotateBy(delta) {
-      map.setBearing(map.getBearing() + delta);
+      setBearingAnimated(map.getBearing() + delta);
     }
 
     const ZoomRotateControl = L.Control.extend({
@@ -117,7 +131,7 @@ export default function App() {
         L.DomEvent.disableScrollPropagation(container);
         container.querySelector('[data-action="rotleft"]').addEventListener('click', () => rotateBy(-15));
         container.querySelector('[data-action="rotright"]').addEventListener('click', () => rotateBy(15));
-        container.querySelector('[data-action="north"]').addEventListener('click', () => map.setBearing(0));
+        container.querySelector('[data-action="north"]').addEventListener('click', () => setBearingAnimated(0));
 
         // Putar ikon kompas mengikuti arah peta saat ini (jarum selalu nunjuk utara asli)
         const compassIcon = container.querySelector('.zr-compass-icon');

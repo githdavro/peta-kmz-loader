@@ -239,7 +239,12 @@ input[type=file]{ display: none; }
 
 .map-wrap{ position: absolute; inset: 0; min-width: 0; }
 #map{ height: 100%; width: 100%; background: #0a1418; }
-.zr-compass-icon{ display: inline-block; font-size: 20px !important; }
+.zr-compass-icon{ display: inline-block; font-size: 20px !important; transition: transform 0.3s cubic-bezier(0.22,0.9,0.32,1.05); }
+/* Animasi halus HANYA saat tombol putar/utara diklik (class dipasang sesaat via JS).
+   Gestur pinch 2 jari sengaja dibiarkan instan (tanpa class ini) biar nempel pas jari. */
+.leaflet-rotate-pane.rp-anim{
+  transition: transform 0.34s cubic-bezier(0.22, 0.9, 0.32, 1.05);
+}
 
 .dropzone{
   position: absolute; inset: 14px;
