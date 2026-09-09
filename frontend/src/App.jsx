@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
+import { ensureLeafletRotate } from './lib/leaflet-global.js';
 import { ingestKmzBuffer, ingestKmlBuffer } from './lib/kmz.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -14,8 +15,6 @@ export default function App() {
   const mapRef = useRef(null);
   const dataLayerRef = useRef(null);
   const assetUrlsRef = useRef([]);
-  const rotationRef = useRef(0);
-  const rotWrapperRef = useRef(null);
   const fileInputRef = useRef(null);
   const satelliteLayerRef = useRef(null);
   const streetLayerRef = useRef(null);
@@ -42,8 +41,23 @@ export default function App() {
 
   // --- init map once ---
   useEffect(() => {
-    const map = L.map(mapElRef.current, { zoomControl: false, attributionControl: false }).setView([-2.5, 118], 5);
-    mapRef.current = map;
+    let cancelled = false;
+    let map;
+
+    ensureLeafletRotate().then(() => {
+      if (cancelled) return;
+
+      map = L.map(mapElRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+        // --- rotasi bebas (leaflet-rotate) ---
+        rotate: true, // aktifkan bearing/rotasi native (pan & zoom tetap jalan saat berputar)
+        bearing: 0,
+        touchRotate: true, // gestur 2 jari: putar sambil pinch-zoom & geser, seperti Google Maps
+        rotateControl: false, // pakai tombol kustom sendiri (zr-control), bukan bawaan plugin
+        shiftKeyRotate: true, // bonus desktop: shift + scroll buat putar
+      }).setView([-2.5, 118], 5);
+      mapRef.current = map;
 
     const satelliteLayer = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -64,22 +78,12 @@ export default function App() {
     streetLayerRef.current = streetLayer;
     labelsLayerRef.current = labelsLayer;
 
-    // --- rotation wrapper: only rotates the tile/marker panes, not the controls ---
-    const mapPaneEl = map.getPane('mapPane');
-    const rotWrapper = document.createElement('div');
-    rotWrapper.className = 'map-rotate-wrapper';
-    mapPaneEl.parentNode.insertBefore(rotWrapper, mapPaneEl);
-    rotWrapper.appendChild(mapPaneEl);
-    rotWrapperRef.current = rotWrapper;
+    // Label nama tempat & tombol kontrol sengaja tinggal di pane yang TIDAK ikut
+    // berputar (norotatePane), jadi tulisan tetap tegak dibaca meski peta diputar
+    // — sama seperti perilaku Google Maps.
 
-    function applyRotation() {
-      rotWrapper.style.transform = `rotate(${rotationRef.current}deg) scale(1.8)`;
-      if (((rotationRef.current % 360) + 360) % 360 !== 0) map.dragging.disable();
-      else map.dragging.enable();
-    }
     function rotateBy(delta) {
-      rotationRef.current = ((rotationRef.current + delta) % 360 + 360) % 360;
-      applyRotation();
+      map.setBearing(map.getBearing() + delta);
     }
 
     const ZoomRotateControl = L.Control.extend({
@@ -106,22 +110,36 @@ export default function App() {
         container.innerHTML =
           '<div class="zr-btn" data-action="rotleft" title="Putar kiri"><span class="material-symbols-rounded">rotate_left</span></div>' +
           '<div class="zr-divider"></div>' +
+          '<div class="zr-btn zr-compass" data-action="north" title="Set ke utara"><span class="material-symbols-rounded zr-compass-icon">navigation</span></div>' +
+          '<div class="zr-divider"></div>' +
           '<div class="zr-btn" data-action="rotright" title="Putar kanan"><span class="material-symbols-rounded">rotate_right</span></div>';
         L.DomEvent.disableClickPropagation(container);
         L.DomEvent.disableScrollPropagation(container);
         container.querySelector('[data-action="rotleft"]').addEventListener('click', () => rotateBy(-15));
         container.querySelector('[data-action="rotright"]').addEventListener('click', () => rotateBy(15));
+        container.querySelector('[data-action="north"]').addEventListener('click', () => map.setBearing(0));
+
+        // Putar ikon kompas mengikuti arah peta saat ini (jarum selalu nunjuk utara asli)
+        const compassIcon = container.querySelector('.zr-compass-icon');
+        const updateCompass = () => {
+          compassIcon.style.transform = `rotate(${-map.getBearing()}deg)`;
+        };
+        map.on('rotate', updateCompass);
+        updateCompass();
+
         return container;
       },
     });
     new RotateControl().addTo(map);
 
-    dataLayerRef.current = L.featureGroup().addTo(map);
+      dataLayerRef.current = L.featureGroup().addTo(map);
 
-    fetchAvailableFiles();
+      fetchAvailableFiles();
+    });
 
     return () => {
-      map.remove();
+      cancelled = true;
+      if (map) map.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
