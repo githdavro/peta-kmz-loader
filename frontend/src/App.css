@@ -300,32 +300,46 @@ input[type=file]{ display: none; }
 .zr-control{
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: 18px;
   overflow: hidden;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.35);
-  background: var(--panel);
+  background: linear-gradient(160deg, rgba(23,49,58,0.72), rgba(13,26,32,0.78));
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow:
+    0 12px 28px rgba(0,0,0,0.42),
+    0 2px 6px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    inset 0 -2px 3px rgba(0,0,0,0.22);
 }
 /* Naikkan seluruh grup kontrol zoom & rotasi (pojok kiri bawah) supaya
    tidak tertutup FAB hamburger yang mengambang di sudut yang sama. */
 .leaflet-bottom.leaflet-left{
   margin-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
 }
+/* Sejajarkan (rata kiri) grup zoom & rotasi persis dengan FAB hamburger
+   di bawahnya — keduanya sama-sama 56px, jadi tinggal samakan offset kiri. */
+.leaflet-left .zr-control{
+  margin-left: calc(16px + env(safe-area-inset-left)) !important;
+}
 .zr-btn{
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--panel);
+  background: transparent;
   color: var(--accent);
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background 0.15s ease, filter 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.zr-btn:hover{ background: var(--panel-2); }
-.zr-btn:active{ background: var(--panel-2); filter: brightness(1.15); }
-.zr-divider{ height: 1px; background: var(--line); margin: 0; }
+.zr-btn:hover{ background: rgba(255,255,255,0.08); }
+.zr-btn:active{ background: rgba(255,255,255,0.14); filter: brightness(1.15); }
+.zr-btn .material-symbols-rounded{ font-size: 22px !important; }
+.zr-divider{ height: 1px; background: rgba(255,255,255,0.12); margin: 0; }
 .zr-gap{ height: 8px; }
+.zr-control-rotate .zr-compass-icon{ font-size: 22px !important; }
 
 ::-webkit-scrollbar{ width: 8px; }
 ::-webkit-scrollbar-track{ background: transparent; }
@@ -355,7 +369,5 @@ input[type=file]{ display: none; }
   .fab{ width: 52px; height: 52px; }
 }
 
-/* Larger tap targets and no hover-only affordances on touch devices */
-@media (hover: none) and (pointer: coarse){
-  .zr-btn{ width: 44px; height: 44px; }
-}
+/* zr-btn sudah 56px secara default (konsisten dgn FAB), jadi tidak perlu
+   override ukuran khusus lagi untuk perangkat sentuh. */

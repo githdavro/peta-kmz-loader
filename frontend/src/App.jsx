@@ -120,7 +120,7 @@ export default function App() {
     const RotateControl = L.Control.extend({
       options: { position: 'bottomleft' },
       onAdd: function () {
-        const container = L.DomUtil.create('div', 'zr-control');
+        const container = L.DomUtil.create('div', 'zr-control zr-control-rotate');
         container.innerHTML =
           '<div class="zr-btn" data-action="rotleft" title="Putar kiri"><span class="material-symbols-rounded">rotate_left</span></div>' +
           '<div class="zr-divider"></div>' +
