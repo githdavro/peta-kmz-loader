@@ -69,7 +69,11 @@ export default function App() {
     });
     const labelsLayer = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19, pane: 'shadowPane' }
+      // Layer ini satu raster gabungan garis batas wilayah + teks label kota jadi satu
+      // gambar (bukan 2 layer terpisah), jadi HARUS ikut berputar bareng peta lewat
+      // 'overlayPane' (pane yang ikut rotatePane) — kalau ditaruh di pane yang tidak
+      // ikut rotasi, garis batasnya bakal geser/tidak nempel ke medan aslinya lagi.
+      { maxZoom: 19, pane: 'overlayPane' }
     );
 
     satelliteLayer.addTo(map);
@@ -77,10 +81,6 @@ export default function App() {
     satelliteLayerRef.current = satelliteLayer;
     streetLayerRef.current = streetLayer;
     labelsLayerRef.current = labelsLayer;
-
-    // Label nama tempat & tombol kontrol sengaja tinggal di pane yang TIDAK ikut
-    // berputar (norotatePane), jadi tulisan tetap tegak dibaca meski peta diputar
-    // — sama seperti perilaku Google Maps.
 
     // Perubahan bearing dari pinch/gesture 2 jari harus instan (no transition,
     // biar nempel pas sama gerakan jari). Tapi klik tombol putar kiri/kanan/utara
