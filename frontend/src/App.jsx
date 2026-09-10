@@ -5,10 +5,40 @@ import { ingestKmzBuffer, ingestKmlBuffer } from './lib/kmz.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-const ATTRIBUTION_TEXT = {
-  Satelit: 'Leaflet  •  Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics  •  © OpenStreetMap contributors',
-  Jalan: 'Leaflet  •  © OpenStreetMap contributors',
+const ATTRIBUTION_REST = {
+  Satelit: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics  •  © OpenStreetMap contributors',
+  Jalan: '© OpenStreetMap contributors',
 };
+
+// Sesuai konvensi resmi Leaflet: kredit "Leaflet" selalu disertai bendera Ukraina
+// kecil (SVG bawaan mereka sendiri) sebagai bentuk dukungan — dilink ke leafletjs.com.
+// CRISP (NUS) dikreditkan juga karena beberapa file overlay .kmz/.kml di data/
+// merupakan citra IKONOS dari mereka (lihat <description> di file KML-nya).
+function AttributionItem({ text }) {
+  return (
+    <span className="attrib-item">
+      <a
+        href="https://leafletjs.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="A JavaScript library for interactive maps"
+        className="attrib-leaflet"
+      >
+        <svg aria-hidden="true" viewBox="0 0 12 8" className="attrib-flag">
+          <path fill="#4C7BE1" d="M0 0h12v4H0z" />
+          <path fill="#FFD500" d="M0 4h12v3H0z" />
+          <path fill="#E0BC00" d="M0 7h12v1H0z" />
+        </svg>
+        Leaflet
+      </a>
+      {'  •  ' + text}
+      {'  •  Citra IKONOS © '}
+      <a href="https://crisp.nus.edu.sg/" target="_blank" rel="noopener noreferrer" title="Centre for Remote Imaging, Sensing and Processing, NUS" className="attrib-leaflet">
+        CRISP
+      </a>
+    </span>
+  );
+}
 
 export default function App() {
   const mapElRef = useRef(null);
@@ -347,8 +377,8 @@ export default function App() {
         <span className="brand-name">Peta KMZ</span>
         <div className="attrib-marquee">
           <div className="attrib-marquee-track">
-            <span>{ATTRIBUTION_TEXT[baseLayerName]}</span>
-            <span>{ATTRIBUTION_TEXT[baseLayerName]}</span>
+            <AttributionItem text={ATTRIBUTION_REST[baseLayerName]} />
+            <AttributionItem text={ATTRIBUTION_REST[baseLayerName]} />
           </div>
         </div>
       </div>
