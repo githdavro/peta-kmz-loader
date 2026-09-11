@@ -371,6 +371,27 @@ export default function App() {
 
   return (
     <div className="app" id="app">
+      {/* Filter SVG buat efek "liquid glass" beneran (feDisplacementMap) — teknik dari
+          artikel Aave "Building Glass for the Web". Ini nekuk piksel di BELAKANG
+          panel kaca (lewat backdrop-filter: url(#...)), bukan cuma blur rata.
+          Cuma jalan penuh di browser Chromium (Chrome/Edge/Android WebView) karena
+          `backdrop-filter: url()` memang belum didukung Safari/Firefox — di sana
+          otomatis fallback ke blur+saturate polos yang sudah ada (tidak rusak,
+          cuma nggak dapet efek bengkoknya). Aave sendiri bikin versi yang beneran
+          cross-browser dengan cara duplikat konten di belakangnya lalu di-filter
+          pakai `filter` biasa (bukan backdrop-filter) — itu di luar skala patch ini
+          karena latar belakangnya di sini peta Leaflet yang terus bergerak/diputar.
+      */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+        <defs>
+          <filter id="lg-distort" x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.009 0.012" numOctaves="2" seed="7" result="noise" />
+            <feGaussianBlur in="noise" stdDeviation="2.2" result="softNoise" />
+            <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="16" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </defs>
+      </svg>
+
       <div className="topbar-glow" aria-hidden="true" />
 
       <div className="topbar-pill">
